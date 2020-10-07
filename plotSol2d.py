@@ -14,21 +14,18 @@ outdir="test2dMpi"
 start = 0
 #end= len(times)
 end= 100000
-#import glob
-#glob.glob('145592*.jpg')
 
 def plotAll():
-  #p2d = True 
-  p2d = False 
+  p2d = True 
+  #p2d = False 
   fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8,8))
   cb = None
   
   for nn in range(start,end+1):
     uu = np.loadtxt(join(outdir, ("test2d%04d.txt" % nn)))
     #timeSim=times[nn-1]
-    timeSim=0
     ax.cla()  
-    ax.set_title(timeSim)
+    ax.set_title(nn)
     if(p2d):
       img = ax.imshow(uu, norm = matplotlib.colors.Normalize(vmin=0.0, vmax=1.0), cmap="Blues")
       if(not cb is None):

@@ -2,6 +2,9 @@ import numpy as np
 from os.path import join
 from mpi4py import MPI
 
+import time
+start_time = time.time()
+
 D=1.0
 
 time0=0.0
@@ -9,13 +12,18 @@ time1=0.5
 
 LL = 1.0
 
-mx = 128
+mx = 256
 
-##define update method
-method="implicit"
-#method="explicit"
-outdir="test1dMpi-%s" % method
-
+import sys
+if(len(sys.argv)!=2):
+  print("One argument needed: implicit or explicit")
+  sys.exit()
+else:
+  method = sys.argv[1]
+  if(not method in ["implicit","explicit"]):
+    print("method must be implicit or explicit")
+    sys.exit()
+    
 
 ##Mpi
 comm = MPI.COMM_WORLD
@@ -25,17 +33,24 @@ if(mx%nproc!=0):
   print("mx should be div to nproc" )
   sys.exit(0)
 
-my_mx = int(mx/nproc)
-
 rank = comm.Get_rank()
 
+#OUTDIR
+outdir="test1dMpi-%s" % method
+if(rank==0):
+  import os
+  if not os.path.exists(outdir):
+    os.mkdir(outdir)
 
 
-myLL = float(LL/nproc)
+my_mx = int(mx/nproc)
 
-xx = np.linspace(myLL*rank,(rank+1)*myLL,my_mx)
+#define xx
+start=0.0
+end=LL
+xx_tot = np.linspace(start,end,mx)
+xx = xx_tot[rank*my_mx:(rank+1)*my_mx]
 dx = xx[1]-xx[0]
-
 
 from math import pi
 def anSol(t):
@@ -98,7 +113,7 @@ def getMaxDt():
 
 
 
-###define explicit and implicut update
+###define explicit and implicit update
 def explicit(alpha,yy,yy1):
   for ii in range(1,my_mx+1):
     yy1[ii] = alpha*(yy[ii+1] + yy[ii-1]) + (1.0 - 2.0 * alpha) * yy[ii]
@@ -111,8 +126,13 @@ def implicit(alpha,yy,yy1):
   aa[:]=-alpha
   cc[:]=-alpha
   bb[:] = 1.0 + 2.0*alpha
+  #left bc for bb and cc 
+  if(rank==0):
+    cc[0] = 0.0
+    bb[0] =1.0
   
   #thomas alg start
+  #https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
   dd =np.zeros((my_mx+1))
   dd[:] =  yy[0:-1] 
   ##the forward part
@@ -148,7 +168,8 @@ def implicit(alpha,yy,yy1):
     yy1[my_mx] = dd[my_mx]/bb[my_mx]
 
   for ii in range(my_mx-1,0,-1):
-    yy1[ii] = (dd[ii] - cc[ii] * yy1[ii+1])/bb[ii]          
+    yy1[ii] = (dd[ii] - cc[ii] * yy1[ii+1])/bb[ii]       
+   
   if(rank!=0):
     data_send = np.empty((1), dtype='f')
     data_send[0] = yy1[1]
@@ -186,13 +207,13 @@ writeToFile = writeToFile1
 
 if method=="implicit":
   update = implicit
-  cfl=1.3 
+  cfl=10.0 
 else:
   update = explicit
   cfl=1.0  
 
-yy = np.zeros(my_mx+2)
-yy1 = np.zeros(my_mx+2)
+yy = np.empty((my_mx+2), dtype="f")
+yy1 = np.empty((my_mx+2), dtype="f")
 
 #initial conditions
 yy[1:-1]=np.sin(pi * xx)
@@ -203,6 +224,8 @@ nsaved = 0
 simTime = time0
 simTimes = []
 while(simTime<time1):
+  ##aply bc
+  bc(yy)
   if(niter%niter_save==0):
     if(rank==0):
       print("Iter %d at time %f" % (niter,simTime))
@@ -213,7 +236,6 @@ while(simTime<time1):
 
   ##new dt  
   dt = cfl * getMaxDt()
-  bc(yy)
   
   ##update
   alpha = D * dt/dx**2
@@ -232,6 +254,5 @@ simTimes.append(simTime)
 if(rank==0):
   print("Iter %d at time %f" % (niter,simTime))
   np.savetxt(join(outdir, "times.txt"), np.array(simTimes))  
-
-
-  
+elapsed_time = time.time() - start_time
+print("Time %f" % elapsed_time, " rank %d" % rank)

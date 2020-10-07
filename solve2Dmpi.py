@@ -1,12 +1,31 @@
 import numpy as np
+from os.path import join
 from mpi4py import MPI
 
+import time
+start_time = time.time()
 
-mx = 128
-my = 128
+D=1.0
 
-nprocx=2
-nprocy=2
+mx = 256
+my = 256
+
+
+import sys
+if(len(sys.argv)!=3):
+  print("Two arguments needed: nprocx nprocy")
+  sys.exit()
+else:
+  try:
+    nprocx = int(sys.argv[1])
+  except ValueError:
+    print("nprocx must be int")
+    sys.exit()
+  try:
+    nprocy = int(sys.argv[2])
+  except ValueError:
+    print("nprocy must be int")
+    sys.exit()
 
 import sys
 
@@ -51,26 +70,31 @@ print("Processor ",rank, coord2d,  "has his neighbour DU ", down, " coords ",  g
 
 
 
-from os.path import join
-
-D=1.0
-
-
 outdir="test2dMpi"
+if(rank==0):
+  import os
+  if not os.path.exists(outdir):
+    os.mkdir(outdir)
 
 LL=1.0
 
-myLLx = LL/nprocx
-myLLy = LL/nprocy
+dx=LL/(mx-1)
+dy=LL/(my-1)
 
-my_startx = myLLx * (nprocx-1-coord2d[1])
-my_starty = myLLy * coord2d[0]
-xx = np.linspace(my_startx,my_startx + myLLx,my_mx)
-yy = np.linspace(my_starty,my_starty + myLLy,my_my)
+my_startx = my_mx * (nprocx-1-coord2d[1]) * dx
+my_endx = (my_mx *  (nprocx-coord2d[1]) - 1) * dx
+my_starty = my_my * coord2d[0] * dy 
+my_endy = (my_my * (coord2d[0] + 1) - 1) * dy 
+
+
+xx = np.linspace(my_startx,my_endx,my_mx)
+yy = np.linspace(my_starty,my_endy,my_my)
+
 
 dx = xx[1]-xx[0]
 dy = yy[1]-yy[0]
 
+print("RANK ", rank, " dims X: ", xx[0], xx[-1], dx, " Y: ",  yy[0], yy[-1])
 
 from math import pi
 
@@ -91,7 +115,6 @@ time1=0.025
 
 #notice that corners are not send/recv and are in the corners BC are not set.
 def bc(uu):
-
   ##vertical dir x (first matrix index)
   data_x_send = np.empty(my_my, dtype='f')
   data_x_recv = np.empty(my_my, dtype='f')
@@ -228,6 +251,7 @@ def thomas(my_mx,dd,yy1,aa,bb,cc,direction):
     comm2d.Send([data_send,1,MPI.DOUBLE], dest=leftProc, tag=0)
 
 
+##SOLVE start
 uu = np.zeros((my_mx+2,my_my+2))
 uu1 = np.zeros((my_mx+2,my_my+2))
 
@@ -237,8 +261,6 @@ for ii in range(1,my_mx+1):
   for jj in range(1,my_my+1):
     uu[ii,jj] = exp(-20.0 * (xx[ii-1]-0.5*LL)**2 -20.0 * (yy[jj-1]-0.5*LL)**2)
 
-#writeToFile(uu,0)
-#sys.exit(0)
 
 ##bc
 bc(uu)
@@ -258,7 +280,7 @@ while(simTime<time1):
     nsaved+=1
 
   ##new dt  
-  cfl=10
+  cfl=50.0
   dt = cfl * getMaxDt()
 
   
@@ -275,10 +297,16 @@ while(simTime<time1):
   cc=np.empty((my_mx+1))
   aa[:]=-alpha
   cc[:]=-alpha
+  #left bc for cc
+  if(up==MPI.PROC_NULL):
+    cc[0] = 0.0
   dd =np.zeros((my_mx+1))
   xx1 =np.zeros((my_mx+2))
   for jj in range(1,my_my+1):
     bb[:] = 1.0 + 2.0*alpha
+    #left bc for bb
+    if(up==MPI.PROC_NULL):
+      bb[0] = 1.0
     #the last index of uu is not needed
     dd[:] = beta * uu[:-1,jj+1] + (1.0 - 2.0*beta)  * uu[:-1,jj] + beta * uu[:-1,jj-1]
     thomas(my_mx,dd,xx1,aa,bb,cc,0)  
@@ -294,10 +322,14 @@ while(simTime<time1):
   cc=np.empty((my_my+1))
   aa[:]=-beta
   cc[:]=-beta
+  if(left==MPI.PROC_NULL):
+    cc[0] = 0.0
   dd =np.zeros((my_my+1))
   xx1 =np.zeros((my_my+2))
   for ii in range(1,my_mx+1):
     bb[:] = 1.0 + 2.0*beta
+    if(left==MPI.PROC_NULL):
+      bb[0] = 1.0
     dd[:] = alpha * uu1[ii+1,:-1] + (1.0 - 2.0*alpha)  * uu1[ii,:-1] + alpha * uu1[ii-1,:-1]
     thomas(my_my,dd,xx1,aa,bb,cc,1)  
     uu[ii,1:-1] =  xx1[1:-1] 
@@ -318,8 +350,5 @@ if(rank==0):
   simTimes.append(simTime)
   #save times file
   np.savetxt(join(outdir, "times.txt"), np.array(simTimes))  
-
-
-  
-  
-
+elapsed_time = time.time() - start_time
+print("Time %f" % elapsed_time, " rank %d" % rank)

@@ -1,19 +1,13 @@
-1) Create folders:
- test1dMpi-explicit  test1dMpi-implicit  test2dMpi
-for saving files
 
-2) Solve eqs
 1D:
-change method to "implicit" or "explicit" in solve1Dmpi.py
-mpirun -n 4 python3 solve1Dmpi.py
+mpirun -n 4 python3 solve1Dmpi.py implicit
+mpirun -n 4 python3 solve1Dmpi.py explicit
 2D:
-nprocx=2 and nprocy=2 hardcoded in solve2Dmpi.py (nprocx * nprocy must be equal to  the total number of processes)
-mpirun -n 4 python3 solve2Dmpi.py
+mpirun -n 4 python3 solve2Dmpi.py 2 2
 
-3)Plot
 1D:
-change outdir in plotSol1d.py for expl/impl
-python3 plotSol1d.py 
+python3 plotSol1d.py implicit 
+python3 plotSol1d.py explicit 
 2D:
 python3 plotSol2d.py
 
