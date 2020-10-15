@@ -1,0 +1,42 @@
+ &filelist
+	base_filename='bw_1d'
+        autoconvert=.true.
+        saveprim=.true.
+        nwauxio=1
+	convert_type='vtuBCCmpi'
+ /
+
+ &savelist
+        dtsave_dat=0.05
+ /
+
+ &stoplist
+        time_max=0.25d0
+ /
+
+ &methodlist
+        time_stepper='threestep'
+        flux_scheme=20*'hllc'
+        limiter=20*'koren'
+ /
+
+ &boundlist
+        typeboundary_min1=3*'cont'
+        typeboundary_max1=3*'cont'
+ / 
+
+ &meshlist
+        refine_criterion=3
+        refine_max_level=3
+        w_refine_weight(1)=0.5
+        w_refine_weight(3)=0.5
+        block_nx1=10
+        domain_nx1=100
+        xprobmin1=0d0
+        xprobmax1=36d0
+ /
+
+ &paramlist
+        typecourant='maxsum'
+        courantpar=0.5d0
+ /
